@@ -2,17 +2,16 @@ repeat wait() until game:IsLoaded()
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
 local espAtivo = false
+local aimbotTarget = nil
 local aimbotAtivo = false
 local flyAtivo = false
 local killAuraAtivo = false
-local currentTarget = nil
 
 local gui = Instance.new("ScreenGui", PlayerGui)
 gui.Name = "TakashiHubUI"
@@ -43,17 +42,16 @@ bolinha.MouseButton1Click:Connect(function()
 	menu.Visible = not menu.Visible
 end)
 
-local function criarBotao(texto, ordem, callback)
-	local btn = Instance.new("TextButton", menu)
-	btn.Size = UDim2.new(1, 0, 0, 40)
-	btn.Position = UDim2.new(0, 0, 0, (ordem - 1) * 45)
-	btn.Text = texto
-	btn.Font = Enum.Font.GothamBold
-	btn.TextSize = 16
-	btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-	btn.TextColor3 = Color3.new(1,1,1)
-	btn.MouseButton1Click:Connect(callback)
-	return btn
+local function criarBotao(txt, ordem, fn)
+	local b = Instance.new("TextButton", menu)
+	b.Size = UDim2.new(1, 0, 0, 40)
+	b.Position = UDim2.new(0, 0, 0, (ordem - 1) * 45)
+	b.Text = txt
+	b.Font = Enum.Font.GothamBold
+	b.TextSize = 16
+	b.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+	b.TextColor3 = Color3.new(1, 1, 1)
+	b.MouseButton1Click:Connect(fn)
 end
 
 criarBotao("👁️ ESP 👁️", 1, function()
@@ -61,7 +59,29 @@ criarBotao("👁️ ESP 👁️", 1, function()
 end)
 
 criarBotao("🔫 Aimbot 🔫", 2, function()
-	aimbotAtivo = true
+	if aimbotAtivo then
+		aimbotAtivo = false
+		aimbotTarget = nil
+	else
+		local closest = nil
+		local shortest = math.huge
+		for _, p in pairs(Players:GetPlayers()) do
+			if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") then
+				local pos, vis = Camera:WorldToViewportPoint(p.Character.Head.Position)
+				if vis then
+					local dist = (Vector2.new(pos.X, pos.Y) - UserInputService:GetMouseLocation()).Magnitude
+					if dist < shortest then
+						shortest = dist
+						closest = p
+					end
+				end
+			end
+		end
+		if closest then
+			aimbotTarget = closest
+			aimbotAtivo = true
+		end
+	end
 end)
 
 criarBotao("🚀 Fly 🚀", 3, function()
@@ -113,24 +133,8 @@ RunService.RenderStepped:Connect(function()
 end)
 
 RunService.RenderStepped:Connect(function()
-	if aimbotAtivo then
-		local closest, shortest = nil, math.huge
-		for _, p in pairs(Players:GetPlayers()) do
-			if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") then
-				local pos, onscreen = Camera:WorldToViewportPoint(p.Character.Head.Position)
-				if onscreen then
-					local dist = (Vector2.new(pos.X, pos.Y) - UserInputService:GetMouseLocation()).Magnitude
-					if dist < shortest then
-						shortest = dist
-						closest = p
-					end
-				end
-			end
-		end
-		if closest then
-			currentTarget = closest
-			Camera.CFrame = CFrame.new(Camera.CFrame.Position, closest.Character.Head.Position)
-		end
+	if aimbotAtivo and aimbotTarget and aimbotTarget.Character and aimbotTarget.Character:FindFirstChild("Head") then
+		Camera.CFrame = CFrame.new(Camera.CFrame.Position, aimbotTarget.Character.Head.Position)
 	end
 end)
 
@@ -156,10 +160,21 @@ end)
 RunService.RenderStepped:Connect(function()
 	if killAuraAtivo then
 		for _, p in pairs(Players:GetPlayers()) do
-			if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Humanoid") then
-				local h = p.Character.Humanoid
-				if h.Health > 0 then
-					h:TakeDamage(2)
+			if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Humanoid") and p.Character:FindFirstChild("HumanoidRootPart") then
+				local humanoid = p.Character.Humanoid
+				local hrp = p.Character.HumanoidRootPart
+				if humanoid.Health > 0 and (hrp.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude < 10 then
+					local guiChildren = PlayerGui:GetDescendants()
+					local isAlly = false
+					for _, v in pairs(guiChildren) do
+						if v:IsA("TextLabel") and v.Text == p.DisplayName then
+							isAlly = true
+							break
+						end
+					end
+					if not isAlly then
+						humanoid:TakeDamage(5)
+					end
 				end
 			end
 		end
